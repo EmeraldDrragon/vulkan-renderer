@@ -21,7 +21,7 @@ int main()
 
     std::cout << "volk initialized" << std::endl;
 
-    //init sdl (Sdl class)
+    //init sdl (Output class)
     if(!SDL_Init(SDL_INIT_VIDEO))
     {
         std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
@@ -30,7 +30,7 @@ int main()
 
     std::cout << "SDL initialized" << std::endl;
 
-    //create window with vulkan flag (Sdl class)
+    //create window with vulkan flag (Output class)
     SDL_Window* window = SDL_CreateWindow("vulkan_render", 
         WINDOW_WIDTH, 
         WINDOW_HEIGHT, 
@@ -84,7 +84,7 @@ int main()
 
     std::cout << "volk loaded" << std::endl;
 
-    //Surface creation for SDL (Sdl class)
+    //Surface creation for SDL (Output class)
     VkSurfaceKHR surface;
     SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface);
 
@@ -129,16 +129,11 @@ int main()
         std::cout << "Family Index [" << i << "]" << std::endl;
         std::cout << "  Queue Count : " << queue_families[i].queueCount << std::endl;
         std::cout << "  Capabilities: ";
-
-        // Check bits using the bitwise AND operator
         if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)       std::cout << "GRAPHICS ";
         if (queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT)        std::cout << "COMPUTE ";
         if (queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)       std::cout << "TRANSFER ";
         if (queue_families[i].queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) std::cout << "SPARSE ";
-        
-        // Video encoding/decoding (common on 3060)
         if (queue_families[i].queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) std::cout << "VIDEO_DECODE ";
-        
         std::cout << "\n  Timestamp Bits: " << queue_families[i].timestampValidBits << std::endl;
         std::cout << "-----------------------------" << std::endl;
 
@@ -213,7 +208,7 @@ int main()
 
     std::cout << "got graphics and presentation queue" << std::endl;
 
-    //get surface capabilities from physical device (Sdl class)
+    //get surface capabilities from physical device (Output class)
     VkSurfaceCapabilitiesKHR surface_caps;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_caps);
 
@@ -235,9 +230,141 @@ int main()
     };
     vmaCreateAllocator(&allocator_info, &allocator);
 
-   
 
-    //Event loop temporary (Sdl calss)
+    //get image format (Output class)
+    uint32_t format_count;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, nullptr);
+    std::vector<VkSurfaceFormatKHR> formats(format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, formats.data());
+    VkSurfaceFormatKHR surface_format = formats.data()[0];
+    for(VkSurfaceFormatKHR available_format : formats)
+    {
+        if(available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR && 
+            available_format.format == VK_FORMAT_B8G8R8A8_SRGB)
+        {
+            surface_format = available_format;
+            break;  
+        }
+    }
+    VkFormat image_format = surface_format.format;
+    std::cout << "got image color format" << std::endl;
+    VkColorSpaceKHR image_color_space = surface_format.colorSpace;
+    std::cout << "got image color space" << std::endl;
+    
+    //Swapchain (Output class)
+    VkSwapchainKHR swapchain;
+    VkSwapchainCreateInfoKHR swapchain_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .surface = surface,
+        .minImageCount = surface_caps.minImageCount,
+        .imageFormat = image_format,
+        .imageColorSpace = image_color_space,
+        .imageExtent = {
+            .width = surface_caps.currentExtent.width,
+            .height = surface_caps.currentExtent.height
+        },
+        .imageArrayLayers = 1,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .preTransform = surface_caps.currentTransform,
+        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode = VK_PRESENT_MODE_FIFO_KHR
+    };
+    
+    if(vkCreateSwapchainKHR(device, &swapchain_create_info, nullptr, &swapchain) != VK_SUCCESS)
+    {
+        std::cerr << "swapchain not created" << std::endl;
+        return 1;
+    }
+
+    std::cout << "swapchain created" << std::endl;
+
+    //create image and imageview (Output class)
+    uint32_t image_count = 0;
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
+    std::vector<VkImage> swapchain_images(image_count);
+    std::vector<VkImageView> swapchain_image_views(image_count);
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, swapchain_images.data());
+
+    std::cout << "got swapchain images" << std::endl;
+
+    for(auto i = 0; i < image_count; i++)
+    {
+        VkImageViewCreateInfo image_view_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = swapchain_images[i],
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = image_format,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .levelCount = 1,
+                .layerCount = 1
+            }
+        };
+        vkCreateImageView(device, &image_view_create_info, nullptr, &swapchain_image_views[i]);
+    }
+
+    std::cout << "created image views" << std::endl;
+
+    //create depth attachment (Output class)
+    VkImage depth_image;
+    VmaAllocation depth_image_allocation;
+    VkImageView depth_image_view;
+    std::vector<VkFormat> depthFormatList = { 
+        VK_FORMAT_D32_SFLOAT_S8_UINT, 
+        VK_FORMAT_D24_UNORM_S8_UINT 
+    };
+    VkFormat depth_format = VK_FORMAT_UNDEFINED;
+    for(VkFormat& format : depthFormatList)
+    {
+        VkFormatProperties2 format_properties = {
+            .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2
+        };
+        vkGetPhysicalDeviceFormatProperties2(physical_device, format, &format_properties);
+        if (format_properties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) 
+        {
+			depth_format = format;
+			break;
+		}
+    }
+    int window_width;
+    int window_height;
+    SDL_GetWindowSize(window, &window_width, &window_height);
+    VkImageCreateInfo depth_image_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = depth_format,
+        .extent = {
+            .width = static_cast<uint32_t>(window_width), 
+            .height = static_cast<uint32_t>(window_height), 
+            .depth = 1 
+        },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+    VmaAllocationCreateInfo alloc_create_info = {
+        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    vmaCreateImage(allocator, &depth_image_create_info, &alloc_create_info, &depth_image, &depth_image_allocation, nullptr);
+    VkImageViewCreateInfo depth_image_view_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = depth_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = depth_format,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .levelCount = 1,
+            .layerCount = 1
+        }
+    };
+    vkCreateImageView(device, &depth_image_view_create_info, nullptr, &depth_image_view);
+
+
+    //Event loop temporary (Output class)
     bool b_quit = false;
     SDL_Event event;
     while(!b_quit)
@@ -258,6 +385,13 @@ int main()
         }
     }
 
+    for (auto view : swapchain_image_views)
+    {
+        vkDestroyImageView(device, view, nullptr);
+    }
+    vkDestroyImageView(device, depth_image_view, nullptr);
+    vmaDestroyImage(allocator, depth_image, depth_image_allocation);
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
     vmaDestroyAllocator(allocator);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
