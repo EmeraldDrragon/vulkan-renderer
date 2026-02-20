@@ -6,9 +6,43 @@
 #include <SDL3/SDL_vulkan.h>
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
+#include <glm/glm.hpp>
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
+
+
+//Struct for vertex (Mesh class)
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec2 uv;
+};
+
+//shader data (Command class)
+struct shader_data
+{
+    glm::mat4 projection;
+    glm::mat4 view;
+    glm::mat4 model[3];
+    glm::vec4 light_pos = {0.0f, -10.0f, 10.0f, 0.0f};
+    uint32_t selected = 1;
+} shader_data;
+
+struct shader_data_buffer
+{
+    VmaAllocation allocation;
+    VkBuffer buffer;
+    VkDeviceAddress device_address;
+    void* mapped;
+};
 
 int main()
 {
@@ -363,6 +397,136 @@ int main()
     };
     vkCreateImageView(device, &depth_image_view_create_info, nullptr, &depth_image_view);
 
+    std::cout << "depth image and image view created" << std::endl;
+
+    //Loading mesh (Mesh class)
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, "assets/Cat.obj");
+    const VkDeviceSize index_count = shapes[0].mesh.indices.size();
+    std::vector<Vertex> vertices;
+    std::vector<uint16_t> indices;
+    for(auto& index : shapes[0].mesh.indices)
+    {
+        Vertex v = {
+            .pos = {
+                attrib.vertices[index.vertex_index * 3],
+                -attrib.vertices[index.vertex_index * 3 + 1],
+                attrib.vertices[index.vertex_index * 3 + 2]
+            },
+            .normal = {
+                attrib.normals[index.normal_index * 3],
+                -attrib.normals[index.normal_index * 3 + 1],
+                attrib.normals[index.normal_index * 3 + 2]
+            },
+            .uv = {
+                attrib.texcoords[index.texcoord_index * 2],
+                1.0 - attrib.texcoords[index.texcoord_index * 2 + 1]
+            }
+        };
+        vertices.push_back(v);
+        indices.push_back(indices.size());
+    }
+    
+
+    //upload mesh to gpu (Renderer class)
+    VkBuffer v_buffer;
+    VmaAllocation v_buffer_allocation;
+    VkDeviceSize v_buf_size = sizeof(Vertex) * vertices.size();
+    VkDeviceSize i_buf_size = sizeof(uint16_t) * indices.size();
+    VkBufferCreateInfo buffer_create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = v_buf_size + i_buf_size,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+    };
+
+    VmaAllocationCreateInfo buffer_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    vmaCreateBuffer(allocator, &buffer_create_info, &buffer_alloc_info, &v_buffer, &v_buffer_allocation, nullptr);
+
+    void* buffer_ptr;
+    vmaMapMemory(allocator, v_buffer_allocation, &buffer_ptr);
+    memcpy(buffer_ptr, vertices.data(), v_buf_size);
+    memcpy(((char*)buffer_ptr) + v_buf_size, indices.data(), i_buf_size);
+    vmaUnmapMemory(allocator, v_buffer_allocation);
+
+    std::cout << "mesh loaded into gpu" << std::endl;
+
+
+    //cpu/gpu shared resources (Command class)
+    constexpr uint32_t max_frames_in_flight = 2;
+    std::array<shader_data_buffer, max_frames_in_flight> shader_data_buffers;
+    std::array<VkCommandBuffer, max_frames_in_flight> command_buffers;
+
+    //shader data buffers (Command class)
+    for(auto i = 0; i < max_frames_in_flight; i ++)
+    {
+        VkBufferCreateInfo u_buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = sizeof(shader_data),
+            .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+        };
+        VmaAllocationCreateInfo u_buffer_alloc_info = {
+            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO
+        };
+        vmaCreateBuffer(allocator, &u_buffer_create_info, &u_buffer_alloc_info, &shader_data_buffers[i].buffer, &shader_data_buffers[i].allocation, nullptr);
+        vmaMapMemory(allocator, shader_data_buffers[i].allocation, &shader_data_buffers[i].mapped);
+        VkBufferDeviceAddressInfo u_buffer_device_address_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            .buffer = shader_data_buffers[i].buffer
+        };
+        shader_data_buffers[i].device_address = vkGetBufferDeviceAddress(device, &u_buffer_device_address_info);
+    }
+
+    std::cout << "shared resources setup" << std::endl;
+
+
+    //Synchronization objects (Command class)
+    std::array<VkFence, max_frames_in_flight> fences;
+    std::array<VkSemaphore, max_frames_in_flight> present_semaphores;
+    std::vector<VkSemaphore> render_semaphores;
+    VkSemaphoreCreateInfo semaphore_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+    };
+    VkFenceCreateInfo fence_create_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+    for(auto i = 0; i < max_frames_in_flight; i++)
+    {
+        vkCreateFence(device, &fence_create_info, nullptr, &fences[i]);
+        vkCreateSemaphore(device, &semaphore_create_info, nullptr, &present_semaphores[i]);
+    }
+    render_semaphores.resize(swapchain_images.size());
+    for(auto& semaphore : render_semaphores)
+    {
+        vkCreateSemaphore(device, &semaphore_create_info, nullptr, &semaphore);
+    }
+
+    std::cout << "synchronization objects created" << std::endl;
+
+
+    //command buffers (Command class)
+    VkCommandPool command_pool;
+    VkCommandPoolCreateInfo command_pool_create_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queue_family
+    };
+    vkCreateCommandPool(device, &command_pool_create_info, nullptr, &command_pool);
+    VkCommandBufferAllocateInfo command_buffer_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = command_pool,
+        .commandBufferCount = max_frames_in_flight
+    };
+    vkAllocateCommandBuffers(device, &command_buffer_alloc_info, command_buffers.data());
+
+
+
 
     //Event loop temporary (Output class)
     bool b_quit = false;
@@ -385,12 +549,29 @@ int main()
         }
     }
 
+
+    //cleanup
+    for(auto i = 0; i < max_frames_in_flight; i++)
+    {
+        vkDestroySemaphore(device, present_semaphores[i], nullptr);
+        vkDestroyFence(device, fences[i], nullptr);
+    }
+    for(auto semaphore : render_semaphores)
+    {
+        vkDestroySemaphore(device, semaphore, nullptr);
+    }
+    vkDestroyCommandPool(device, command_pool, nullptr);
+    for(auto i = 0; i < max_frames_in_flight; i++)
+    {
+        vmaDestroyBuffer(allocator, shader_data_buffers[i].buffer, shader_data_buffers[i].allocation);
+    }
+    vmaDestroyBuffer(allocator, v_buffer, v_buffer_allocation);
+    vkDestroyImageView(device, depth_image_view, nullptr);
+    vmaDestroyImage(allocator, depth_image, depth_image_allocation);
     for (auto view : swapchain_image_views)
     {
         vkDestroyImageView(device, view, nullptr);
     }
-    vkDestroyImageView(device, depth_image_view, nullptr);
-    vmaDestroyImage(allocator, depth_image, depth_image_allocation);
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vmaDestroyAllocator(allocator);
     vkDestroySurfaceKHR(instance, surface, nullptr);
