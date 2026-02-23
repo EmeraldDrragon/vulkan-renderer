@@ -1,16 +1,25 @@
 #define VOLK_IMPLEMENTATION
 #include <volk/volk.h>
+
 #include <iostream>
 #include <vector>
+#include <array>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
+
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
-#include <glm/glm.hpp>
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+
+#include <ktx.h>
+#include <ktxvulkan.h>
+
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
@@ -18,7 +27,7 @@
 #define WINDOW_HEIGHT 720
 
 
-//Struct for vertex (Mesh class)
+//Struct for vertex (Model class)
 struct Vertex
 {
     glm::vec3 pos;
@@ -26,7 +35,7 @@ struct Vertex
     glm::vec2 uv;
 };
 
-//shader data (Command class)
+//shader data (Renderer class)
 struct shader_data
 {
     glm::mat4 projection;
@@ -35,13 +44,21 @@ struct shader_data
     glm::vec4 light_pos = {0.0f, -10.0f, 10.0f, 0.0f};
     uint32_t selected = 1;
 } shader_data;
-
 struct shader_data_buffer
 {
     VmaAllocation allocation;
     VkBuffer buffer;
     VkDeviceAddress device_address;
     void* mapped;
+};
+
+//textures (Model class)
+struct texture
+{
+    VmaAllocation allocation;
+    VkImage image;
+    VkImageView view;
+    VkSampler sampler;
 };
 
 int main()
@@ -399,7 +416,7 @@ int main()
 
     std::cout << "depth image and image view created" << std::endl;
 
-    //Loading mesh (Mesh class)
+    //Loading mesh (Model class)
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -456,12 +473,12 @@ int main()
     std::cout << "mesh loaded into gpu" << std::endl;
 
 
-    //cpu/gpu shared resources (Command class)
+    //cpu/gpu shared resources (Renderer class)
     constexpr uint32_t max_frames_in_flight = 2;
     std::array<shader_data_buffer, max_frames_in_flight> shader_data_buffers;
     std::array<VkCommandBuffer, max_frames_in_flight> command_buffers;
 
-    //shader data buffers (Command class)
+    //shader data buffers (Renderer class)
     for(auto i = 0; i < max_frames_in_flight; i ++)
     {
         VkBufferCreateInfo u_buffer_create_info = {
@@ -485,7 +502,7 @@ int main()
     std::cout << "shared resources setup" << std::endl;
 
 
-    //Synchronization objects (Command class)
+    //Synchronization objects (Renderer class)
     std::array<VkFence, max_frames_in_flight> fences;
     std::array<VkSemaphore, max_frames_in_flight> present_semaphores;
     std::vector<VkSemaphore> render_semaphores;
@@ -510,7 +527,7 @@ int main()
     std::cout << "synchronization objects created" << std::endl;
 
 
-    //command buffers (Command class)
+    //command buffers (Renderer class)
     VkCommandPool command_pool;
     VkCommandPoolCreateInfo command_pool_create_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -525,7 +542,234 @@ int main()
     };
     vkAllocateCommandBuffers(device, &command_buffer_alloc_info, command_buffers.data());
 
+    //loading textures (Model class)
+    std::array<texture, 3> textures;
+    std::vector<VkDescriptorImageInfo> texture_descriptors;
+    for(auto i = 0; i < textures.size(); i++)
+    {
+        //creating texture image and image view (Model class)
+        ktxTexture* ktx_texture;
+        std::string filename = "assets/cat" + std::to_string(i)  + ".ktx2";
+        ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
+        VkImageCreateInfo texture_image_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = ktxTexture_GetVkFormat(ktx_texture),
+            .extent = {
+                .width = ktx_texture->baseWidth,
+                .height = ktx_texture->baseHeight,
+                .depth = 1
+            },
+            .mipLevels = ktx_texture->numLevels,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        };
+        VmaAllocationCreateInfo texture_image_alloc_create_info = {
+            .usage = VMA_MEMORY_USAGE_AUTO
+        };
+        vmaCreateImage(allocator, &texture_image_create_info, &texture_image_alloc_create_info, &textures[i].image, &textures[i].allocation, nullptr);
+        VkImageViewCreateInfo texture_image_view_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = textures[i].image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = texture_image_create_info.format,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .levelCount = ktx_texture->numLevels,
+                .layerCount = 1
+            }
+        };
+        vkCreateImageView(device, &texture_image_view_create_info, nullptr, &textures[i].view);
 
+        //upload texture to gpu (Renderer class)
+        VkBuffer image_source_buffer;
+        VmaAllocation image_source_allocation;
+        VkBufferCreateInfo image_source_buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = (uint32_t)ktx_texture->dataSize,
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+        };
+        VmaAllocationCreateInfo image_source_alloc_create_info = {
+            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO
+        };
+        VmaAllocationInfo image_source_alloc_info;
+        vmaCreateBuffer(allocator, &image_source_buffer_create_info, &image_source_alloc_create_info, &image_source_buffer, &image_source_allocation, &image_source_alloc_info);
+        memcpy(image_source_alloc_info.pMappedData, ktx_texture->pData, ktx_texture->dataSize);
+
+        VkFenceCreateInfo fence_one_time_create_info = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        };
+        VkFence fence_one_time;
+        vkCreateFence(device, &fence_one_time_create_info, nullptr, &fence_one_time);
+        VkCommandBuffer command_buffer_one_time;
+        VkCommandBufferAllocateInfo command_buffer_one_time_alloc_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = command_pool,
+            .commandBufferCount = 1
+        };
+        vkAllocateCommandBuffers(device, &command_buffer_one_time_alloc_info, &command_buffer_one_time);
+
+        VkCommandBufferBeginInfo command_buffer_one_time_begin_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+        };
+        vkBeginCommandBuffer(command_buffer_one_time, &command_buffer_one_time_begin_info);
+        VkImageMemoryBarrier2 barrier_texture_image = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .srcAccessMask = VK_ACCESS_2_NONE,
+            .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .image = textures[i].image,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .levelCount = ktx_texture->numLevels,
+                .layerCount = 1
+            }
+        };
+
+        VkDependencyInfo barrier_texture_info = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &barrier_texture_image
+        };
+        vkCmdPipelineBarrier2(command_buffer_one_time, &barrier_texture_info);
+        std::vector<VkBufferImageCopy> copy_regions;
+        for (auto j = 0; j < ktx_texture->numLevels; j++) 
+        {
+			ktx_size_t mipOffset{0};
+			KTX_error_code ret = ktxTexture_GetImageOffset(ktx_texture, j, 0, 0, &mipOffset);
+			copy_regions.push_back({
+				.bufferOffset = mipOffset,
+				.imageSubresource = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = (uint32_t)j,
+                    .layerCount = 1
+                },
+				.imageExtent = {
+                    .width = ktx_texture->baseWidth >> j,
+                    .height = ktx_texture->baseHeight >> j,
+                    .depth = 1
+                },
+			});
+		}
+        vkCmdCopyBufferToImage(command_buffer_one_time, image_source_buffer, textures[i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(copy_regions.size()), copy_regions.data());
+        VkImageMemoryBarrier2 barrier_texture_read = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+			.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			.newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+			.image = textures[i].image,
+			.subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .levelCount = ktx_texture->numLevels,
+                .layerCount = 1
+            }
+		};
+        barrier_texture_info.pImageMemoryBarriers = &barrier_texture_read;
+        vkCmdPipelineBarrier2(command_buffer_one_time, &barrier_texture_info);
+        vkEndCommandBuffer(command_buffer_one_time);
+        VkSubmitInfo one_time_submit_info = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &command_buffer_one_time
+        };
+        vkQueueSubmit(queue, 1, &one_time_submit_info, fence_one_time);
+        vkWaitForFences(device, 1, &fence_one_time, VK_TRUE, UINT64_MAX);
+        vkDestroyFence(device, fence_one_time, nullptr);
+        vmaDestroyBuffer(allocator, image_source_buffer, image_source_allocation);
+
+        //sampler (Renderer class)
+        VkSamplerCreateInfo sampler_create_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .anisotropyEnable = VK_TRUE,
+            .maxAnisotropy = 8.0f,
+            .maxLod = (float)ktx_texture->numLevels
+        };
+        vkCreateSampler(device, &sampler_create_info, nullptr, &textures[i].sampler);
+        ktxTexture_Destroy(ktx_texture);
+        texture_descriptors.push_back({
+            .sampler = textures[i].sampler,
+            .imageView = textures[i].view,
+            .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL
+        });
+    }
+
+    std::cout << "textures loaded" << std::endl;
+
+    //Descriptors (Renderer class)
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSetLayout descriptor_set_layout_textures;
+    VkDescriptorSet descriptor_set_textures;
+    VkDescriptorBindingFlags desc_var_flag = VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+    VkDescriptorSetLayoutBindingFlagsCreateInfo desc_binding_flags = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindingFlags = &desc_var_flag
+    };
+    VkDescriptorSetLayoutBinding desc_layout_binding_textures = {
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = static_cast<uint32_t>(textures.size()),
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+    };
+    VkDescriptorSetLayoutCreateInfo desc_layout_texture_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = &desc_binding_flags,
+        .bindingCount = 1,
+        .pBindings = &desc_layout_binding_textures
+    };
+    vkCreateDescriptorSetLayout(device, &desc_layout_texture_create_info, nullptr, &descriptor_set_layout_textures);
+    
+    VkDescriptorPoolSize pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = static_cast<uint32_t>(textures.size())
+    };
+    VkDescriptorPoolCreateInfo desc_pool_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes = &pool_size
+    };
+    vkCreateDescriptorPool(device, &desc_pool_create_info, nullptr, &descriptor_pool);
+
+    uint32_t var_desc_count = static_cast<uint32_t>(textures.size());
+    VkDescriptorSetVariableDescriptorCountAllocateInfo var_desc_count_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT,
+        .descriptorSetCount = 1,
+        .pDescriptorCounts = &var_desc_count
+    };
+    VkDescriptorSetAllocateInfo texture_desc_set_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = &var_desc_count_alloc_info,
+        .descriptorPool = descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptor_set_layout_textures
+    };
+    vkAllocateDescriptorSets(device, &texture_desc_set_alloc_info, &descriptor_set_textures);
+
+    VkWriteDescriptorSet write_desc_set = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = descriptor_set_textures,
+        .dstBinding = 0,
+        .descriptorCount = static_cast<uint32_t>(texture_descriptors.size()),
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = texture_descriptors.data()
+    };
+    vkUpdateDescriptorSets(device, 1, &write_desc_set, 0, nullptr);
+
+    std::cout << "setup descriptors" << std::endl;
 
 
     //Event loop temporary (Output class)
@@ -551,6 +795,12 @@ int main()
 
 
     //cleanup
+    for(auto& texture : textures)
+    {
+        vkDestroySampler(device, texture.sampler, nullptr);
+        vkDestroyImageView(device, texture.view, nullptr);
+        vmaDestroyImage(allocator, texture.image, texture.allocation);
+    }
     for(auto i = 0; i < max_frames_in_flight; i++)
     {
         vkDestroySemaphore(device, present_semaphores[i], nullptr);
