@@ -53,6 +53,21 @@ Engine::Engine()
     vmaSetup();
 }
 
+Engine::~Engine()
+{
+    if(device != VK_NULL_HANDLE)
+    {
+        vkDeviceWaitIdle(device);
+    }
+    main_deletion_queue.flush();
+    vmaDestroyAllocator(allocator);
+    vkDestroyDevice(device, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    vkDestroyInstance(instance, nullptr);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+}
+
 void Engine::physicalDeviceSelection()
 {
     uint32_t device_count = 0;

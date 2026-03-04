@@ -1,4 +1,6 @@
 #pragma once
+
+#define VOLK_IMPLEMENTATION
 #include <volk/volk.h>
 #include "Engine.h"
 
@@ -18,6 +20,7 @@ public:
         getImageFormat(engine);
         createSwapchain(engine);
         createImageAndImageView(engine);
+        createDepthImageAndImageView(engine);
     }
 
     void getImageFormat(Engine* engine)

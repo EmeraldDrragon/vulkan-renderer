@@ -5,6 +5,8 @@
 
 #include <iostream>
 #include <vector>
+#include <deque>
+#include <functional>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -14,6 +16,24 @@
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
+
+struct DeletionQueue {
+    std::deque<std::function<void()>> deletors;
+
+    void push(std::function<void()>&& function)
+    {
+        deletors.push_back(function);
+    }
+    void flush()
+    {
+        for(auto it = deletors.rbegin(); it != deletors.rend(); ++it)
+        {
+            (*it)();
+        }
+        deletors.clear();
+    }
+};
+
 
 class Engine
 {
@@ -27,14 +47,14 @@ public:
     VkQueue queue;
     VkSurfaceCapabilitiesKHR surface_caps;
     VmaAllocator allocator;
+
+    DeletionQueue main_deletion_queue;
     
     Engine();
+    ~Engine();
 
     void physicalDeviceSelection();
-
     void logicalDeviceCreation();
-
     void queueFamilySelection(uint32_t* queue_family_index, VkDeviceQueueCreateInfo* queue_create_info);
-    
     void vmaSetup();
 };
