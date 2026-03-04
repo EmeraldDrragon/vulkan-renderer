@@ -361,6 +361,11 @@ int main()
 
     std::cout << "created image views" << std::endl;
 
+
+
+
+
+    
     //create depth attachment (Output class)
     VkImage depth_image;
     VmaAllocation depth_image_allocation;
