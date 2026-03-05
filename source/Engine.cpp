@@ -47,6 +47,9 @@ Engine::Engine()
 
     logicalDeviceCreation();
 
+    volkLoadDevice(device);
+    std::cout << "volk device functions loaded" << std::endl;
+
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_caps);
     std::cout << "got surface capabilities from physical device" << std::endl;
 

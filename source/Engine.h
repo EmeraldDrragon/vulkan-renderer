@@ -1,6 +1,6 @@
 #pragma once
 
-#define VOLK_IMPLEMENTATION
+
 #include <volk/volk.h>
 
 #include <iostream>
@@ -11,7 +11,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
-#define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
 
 #define WINDOW_WIDTH 1280
