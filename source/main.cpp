@@ -362,20 +362,16 @@ int main()
     std::cout << "created image views" << std::endl;
 
 
-
-
-
-    
     //create depth attachment (Output class)
     VkImage depth_image;
     VmaAllocation depth_image_allocation;
     VkImageView depth_image_view;
-    std::vector<VkFormat> depthFormatList = { 
+    std::vector<VkFormat> depth_format_list = { 
         VK_FORMAT_D32_SFLOAT_S8_UINT, 
         VK_FORMAT_D24_UNORM_S8_UINT 
     };
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    for(VkFormat& format : depthFormatList)
+    for(VkFormat& format : depth_format_list)
     {
         VkFormatProperties2 format_properties = {
             .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2
@@ -425,6 +421,15 @@ int main()
     vkCreateImageView(device, &depth_image_view_create_info, nullptr, &depth_image_view);
 
     std::cout << "depth image and image view created" << std::endl;
+
+
+
+
+
+
+
+    
+
 
     //Loading mesh (Model class)
     tinyobj::attrib_t attrib;
