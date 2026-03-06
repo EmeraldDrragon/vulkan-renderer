@@ -423,14 +423,6 @@ int main()
     std::cout << "depth image and image view created" << std::endl;
 
 
-
-
-
-
-
-    
-
-
     //Loading mesh (Model class)
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -485,10 +477,6 @@ int main()
     std::cout << "mesh loaded into gpu" << std::endl;
 
 
-
-
-
-    
     //cpu/gpu shared resources (Renderer class)
     constexpr uint32_t max_frames_in_flight = 2;
     std::array<shader_data_buffer, max_frames_in_flight> shader_data_buffers;
@@ -556,6 +544,12 @@ int main()
         .commandBufferCount = max_frames_in_flight
     };
     vkAllocateCommandBuffers(device, &command_buffer_alloc_info, command_buffers.data());
+
+
+
+
+
+
 
     //loading textures (Model class)
     std::array<texture, 3> textures;
@@ -791,6 +785,13 @@ int main()
 
     std::cout << "setup descriptors" << std::endl;
 
+
+
+
+
+
+
+    
     //shaders (Renderer class)
     Slang::ComPtr<slang::IGlobalSession> slang_global_session;
     slang::createGlobalSession(slang_global_session.writeRef());

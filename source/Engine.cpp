@@ -98,9 +98,8 @@ void Engine::physicalDeviceSelection()
 
 void Engine::logicalDeviceCreation()
 {
-    uint32_t queue_family_index;
     VkDeviceQueueCreateInfo queue_create_info;
-    queueFamilySelection(&queue_family_index, &queue_create_info);
+    queueFamilySelection(&queue_create_info);
 
     const std::vector<const char*> device_extensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -139,7 +138,7 @@ void Engine::logicalDeviceCreation()
     std::cout << "got graphics and presentation queue" << std::endl;
 }
 
-void Engine::queueFamilySelection(uint32_t* queue_family_index, VkDeviceQueueCreateInfo* queue_create_info)
+void Engine::queueFamilySelection(VkDeviceQueueCreateInfo* queue_create_info)
 {
     uint32_t queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
@@ -164,16 +163,16 @@ void Engine::queueFamilySelection(uint32_t* queue_family_index, VkDeviceQueueCre
         vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &present_support);
         if((queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && present_support)
         {
-            *queue_family_index = i;
+            queue_family_index = i;
             break;
         }
     }
-    std::cout << "chosen queue family index: " << *queue_family_index << std::endl;
+    std::cout << "chosen queue family index: " << queue_family_index << std::endl;
     //queue create info (VulkanEngine class)
     const float queue_priorities = 1.0f;
     *queue_create_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = *queue_family_index,
+        .queueFamilyIndex = queue_family_index,
         .queueCount = 1,
         .pQueuePriorities = &queue_priorities
     };

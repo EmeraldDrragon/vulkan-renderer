@@ -46,6 +46,7 @@ public:
     VkQueue queue;
     VkSurfaceCapabilitiesKHR surface_caps;
     VmaAllocator allocator;
+    uint32_t queue_family_index;
 
     DeletionQueue main_deletion_queue;
     
@@ -54,6 +55,6 @@ public:
 
     void physicalDeviceSelection();
     void logicalDeviceCreation();
-    void queueFamilySelection(uint32_t* queue_family_index, VkDeviceQueueCreateInfo* queue_create_info);
+    void queueFamilySelection(VkDeviceQueueCreateInfo* queue_create_info);
     void vmaSetup();
 };

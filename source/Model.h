@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include "Texture.h"
 
 struct Vertex
 {
@@ -30,6 +31,7 @@ class Model
     VkDeviceSize v_buf_size;
     VkDeviceSize i_buf_size;
     //add dedicated texture here I think
+    Texture* dedicated_texture;
 
 
     Model(std::istream* filename)
