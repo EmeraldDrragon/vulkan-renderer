@@ -58,7 +58,8 @@ class Model
         }
     }
 
-    //call this method from inside scene
+    // call this method from inside scene, maybe actually from renderer 
+    // and put this method into renderer with texture loading
     void loadMeshToGpu(Engine* engine)
     {
         v_buf_size = sizeof(Vertex) * vertices.size();
@@ -69,13 +70,12 @@ class Model
         model_buffer = BufferAlloc::create(engine->allocator, engine->device, size, usage, vma_flags);
         memcpy(model_buffer.allocation_info.pMappedData, vertices.data(), v_buf_size);
         memcpy(((char*)model_buffer.allocation_info.pMappedData)+v_buf_size, indices.data(), i_buf_size);
-        
-        //add here addition to deletion queue
+
+        engine->main_deletion_queue.push([=]() mutable
+        {
+            model_buffer.destroy();
+        });
+        std::cout << "mesh uploaded to cpu" << std::endl;
     }
-
-
-
-
-
 
 };
