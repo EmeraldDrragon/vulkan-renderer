@@ -1,3 +1,20 @@
+
+//main.cpp Usage
+//1. Create Engine
+//2. Create Output
+//3. Create Renderer
+//4. Create Scene
+//5. Create models with a file
+//6. Load them into gpu thorugh renderer
+//7. Load textures into gpu through renderer with a file
+//8. Assign textures to models
+//9. Put model into scene
+//10 Put texture into scene
+//11. Add entities to scene
+//12. update descriptors with a renderer
+
+
+
 #define VOLK_IMPLEMENTATION
 #include <volk/volk.h>
 
@@ -546,11 +563,6 @@ int main()
     vkAllocateCommandBuffers(device, &command_buffer_alloc_info, command_buffers.data());
 
 
-
-
-
-
-
     //loading textures (Model class)
     std::array<texture, 3> textures;
     std::vector<VkDescriptorImageInfo> texture_descriptors;
@@ -723,6 +735,7 @@ int main()
 
     std::cout << "textures loaded" << std::endl;
 
+
     //Descriptors (Renderer class)
     VkDescriptorPool descriptor_pool;
     VkDescriptorSetLayout descriptor_set_layout_textures;
@@ -789,8 +802,6 @@ int main()
 
 
 
-
-
     
     //shaders (Renderer class)
     Slang::ComPtr<slang::IGlobalSession> slang_global_session;
@@ -825,6 +836,12 @@ int main()
     std::cout << "shader loaded" << std::endl;
 
 
+
+
+
+
+
+    
     //Graphics pipeline (Renderer class)
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;

@@ -1,9 +1,18 @@
 #pragma once
 #include <volk/volk.h>
 #include "ImageAlloc.h"
+
 class Texture
 {
-    ImageAlloc texture_image;
+public:
+    ImageAlloc image;
     VkSampler sampler;
+    VkDescriptorImageInfo descriptor;
+    uint32_t texture_index;
+
+    void destroy(VkDevice device)
+    {
+        image.destroy();
+    }
 
 };

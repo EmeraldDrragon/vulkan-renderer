@@ -18,7 +18,14 @@ public:
     int window_width;
     int window_height;
 
-    Output(Engine* engine);
+    Output(Engine* engine)
+    {
+        getImageFormat(engine);
+        createSwapchain(engine);
+        createImageAndImageView(engine);
+        SDL_GetWindowSize(engine->window, &window_width, &window_height);
+        createDepthImageAndImageView(engine);
+    }
 
     void getImageFormat(Engine* engine);
     void createSwapchain(Engine* engine);

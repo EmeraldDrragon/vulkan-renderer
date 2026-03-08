@@ -1,14 +1,5 @@
 #include "Output.h"
 
-Output::Output(Engine* engine)
-{
-    getImageFormat(engine);
-    createSwapchain(engine);
-    createImageAndImageView(engine);
-    SDL_GetWindowSize(engine->window, &window_width, &window_height);
-    createDepthImageAndImageView(engine);
-}
-
 void Output::getImageFormat(Engine* engine)
 {
     uint32_t format_count;
