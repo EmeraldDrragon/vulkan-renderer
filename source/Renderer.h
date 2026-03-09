@@ -30,6 +30,7 @@
 #include "Output.h"
 #include "ImageAlloc.h"
 #include "Texture.h"
+#include "Model.h"
 
 class Scene;
 
@@ -64,7 +65,9 @@ public:
     VkDescriptorSetLayout descriptor_set_layout_textures;
     VkDescriptorSet descriptor_set_textures;
 
-    // Slang::ComPtr<slang::IGlobalSession> slang_global_session;
+    Slang::ComPtr<slang::IGlobalSession> slang_global_session;
+
+    VkShaderModule shader_module;
 
 
     Renderer(Engine* engine, Output* output)
@@ -124,7 +127,6 @@ public:
         //     .codeSize = spirv->getBufferSize(),
         //     .pCode = (uint32_t*)spirv->getBufferPointer()
         // };
-        // VkShaderModule shader_module;
         // vkCreateShaderModule(device, &shader_module_create_info, nullptr, &shader_module);
 
         // std::cout << "shader loaded" << std::endl;

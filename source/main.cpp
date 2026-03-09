@@ -12,6 +12,7 @@
 //10 Put texture into scene
 //11. Add entities to scene
 //12. update descriptors with a renderer
+//13. Create pipeline
 
 
 
@@ -967,6 +968,18 @@ int main()
     std::cout << "graphics pipeline created" << std::endl;
     std::cout << "starting render loop" << std::endl;
 
+
+
+
+
+
+
+
+
+
+
+
+    
     //Render loop (Renderer class)
     bool update_swapchain = false;
     shaderData shader_data;
