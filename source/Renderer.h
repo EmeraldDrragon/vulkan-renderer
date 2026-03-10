@@ -17,8 +17,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-// #include "slang/slang.h"
-// #include "slang/slang-com-ptr.h"
+#include "slang/slang.h"
+#include "slang/slang-com-ptr.h"
 
 #include <ktx.h>
 #include <ktxvulkan.h>
@@ -66,8 +66,9 @@ public:
     VkDescriptorSet descriptor_set_textures;
 
     Slang::ComPtr<slang::IGlobalSession> slang_global_session;
-
-    VkShaderModule shader_module;
+    Slang::ComPtr<slang::ISession> slang_session;
+    VkShaderModule vert_module;
+    VkShaderModule frag_module;
 
 
     Renderer(Engine* engine, Output* output)
@@ -101,34 +102,34 @@ public:
     //call from main to load shader file
     void loadShaders(std::string shader_file)
     {
-        // Slang::ComPtr<slang::IGlobalSession> slang_global_session;
-        // slang::createGlobalSession(slang_global_session.writeRef());
-        // auto slang_targets = std::to_array<slang::TargetDesc>({{
-        //     .format = SLANG_SPIRV,
-        //     .profile = slang_global_session->findProfile("spirv_1_4")
-        // }});
-        // auto slang_options = std::to_array<slang::CompilerOptionEntry>({{slang::CompilerOptionName::EmitSpirvDirectly, {slang::CompilerOptionValueKind::Int, 1}}});
-        // slang::SessionDesc slang_session_desc = {
-        //     .targets = slang_targets.data(),
-        //     .targetCount =  SlangInt(slang_targets.size()),
-        //     .defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR,
-        //     .compilerOptionEntries = slang_options.data(),
-        //     .compilerOptionEntryCount = uint32_t(slang_options.size())
-        // };
-        // Slang::ComPtr<slang::ISession> slang_session;
-        // slang_global_session->createSession(slang_session_desc, slang_session.writeRef());
-        // Slang::ComPtr<slang::IModule> slang_module{
-        //     slang_session->loadModuleFromSource("triangle", shader_file, nullptr, nullptr)
-        // };
-        // Slang::ComPtr<ISlangBlob> spirv;
-        // slang_module->getTargetCode(0, spirv.writeRef());
-        // VkShaderModuleCreateInfo shader_module_create_info = {
-        //     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        //     .codeSize = spirv->getBufferSize(),
-        //     .pCode = (uint32_t*)spirv->getBufferPointer()
-        // };
-        // vkCreateShaderModule(device, &shader_module_create_info, nullptr, &shader_module);
+        Slang::ComPtr<slang::IGlobalSession> slang_global_session;
+        slang::createGlobalSession(slang_global_session.writeRef());
+        auto slang_targets = std::to_array<slang::TargetDesc>({{
+            .format = SLANG_SPIRV,
+            .profile = slang_global_session->findProfile("spirv_1_4")
+        }});
+        auto slang_options = std::to_array<slang::CompilerOptionEntry>({{slang::CompilerOptionName::EmitSpirvDirectly, {slang::CompilerOptionValueKind::Int, 1}}});
+        slang::SessionDesc slang_session_desc = {
+            .targets = slang_targets.data(),
+            .targetCount =  SlangInt(slang_targets.size()),
+            .defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR,
+            .compilerOptionEntries = slang_options.data(),
+            .compilerOptionEntryCount = uint32_t(slang_options.size())
+        };
+        Slang::ComPtr<slang::ISession> slang_session;
+        slang_global_session->createSession(slang_session_desc, slang_session.writeRef());
+        Slang::ComPtr<slang::IModule> slang_module{
+            slang_session->loadModuleFromSource("triangle", shader_file, nullptr, nullptr)
+        };
+        Slang::ComPtr<ISlangBlob> spirv;
+        slang_module->getTargetCode(0, spirv.writeRef());
+        VkShaderModuleCreateInfo shader_module_create_info = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = spirv->getBufferSize(),
+            .pCode = (uint32_t*)spirv->getBufferPointer()
+        };
+        vkCreateShaderModule(device, &shader_module_create_info, nullptr, &shader_module);
 
-        // std::cout << "shader loaded" << std::endl;
+        std::cout << "shader loaded" << std::endl;
     }
 };
