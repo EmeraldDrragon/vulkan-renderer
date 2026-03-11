@@ -806,6 +806,7 @@ int main()
     
     //shaders (Renderer class)
     Slang::ComPtr<slang::IGlobalSession> slang_global_session;
+
     slang::createGlobalSession(slang_global_session.writeRef());
     auto slang_targets = std::to_array<slang::TargetDesc>({{
         .format = SLANG_SPIRV,
@@ -819,19 +820,26 @@ int main()
         .compilerOptionEntries = slang_options.data(),
         .compilerOptionEntryCount = uint32_t(slang_options.size())
     };
+
     Slang::ComPtr<slang::ISession> slang_session;
+
     slang_global_session->createSession(slang_session_desc, slang_session.writeRef());
+
     Slang::ComPtr<slang::IModule> slang_module{
         slang_session->loadModuleFromSource("triangle", "assets/shader.slang", nullptr, nullptr)
     };
+
     Slang::ComPtr<ISlangBlob> spirv;
+
     slang_module->getTargetCode(0, spirv.writeRef());
     VkShaderModuleCreateInfo shader_module_create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = spirv->getBufferSize(),
         .pCode = (uint32_t*)spirv->getBufferPointer()
     };
+
     VkShaderModule shader_module;
+    
     vkCreateShaderModule(device, &shader_module_create_info, nullptr, &shader_module);
 
     std::cout << "shader loaded" << std::endl;
@@ -846,6 +854,7 @@ int main()
     //Graphics pipeline (Renderer class)
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
+    
     VkPushConstantRange push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .size = sizeof(VkDeviceAddress)

@@ -23,7 +23,11 @@ add_subdirectory(external/VMA)
 add_subdirectory(external/KTX)
 
 add_executable(${PROJECT_NAME}
-    source/main.cpp)
+    source/main.cpp
+    source/RendererLoader.h
+    source/RendererLoader.cpp
+    source/Pipeline.h
+    source/Pipeline.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     source

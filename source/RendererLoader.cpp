@@ -1,7 +1,7 @@
-#include "Renderer.h"
+#include "RendererLoader.h"
 #include "Scene.h"
 
-void Renderer::setupShaderDataBuffers(Engine* engine)
+void RendererLoader::setupShaderDataBuffers(Engine* engine)
 {
     //cosntructor sets up shared resources and synchronization objects
     for(auto i = 0; i < max_frames_in_flight; i++)
@@ -18,7 +18,7 @@ void Renderer::setupShaderDataBuffers(Engine* engine)
     std::cout << "shader data buffers setup complete" << std::endl;
 }
 
-void Renderer::setupSynchronizationObjects(Engine* engine, Output* output)
+void RendererLoader::setupSynchronizationObjects(Engine* engine, Output* output)
 {
     VkSemaphoreCreateInfo semaphore_create_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -53,7 +53,7 @@ void Renderer::setupSynchronizationObjects(Engine* engine, Output* output)
     std::cout << "synchronization objects created" << std::endl;
 }
 
-void Renderer::setupCommandBuffers(Engine* engine)
+void RendererLoader::setupCommandBuffers(Engine* engine)
 {
     VkCommandPoolCreateInfo command_pool_create_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -75,7 +75,7 @@ void Renderer::setupCommandBuffers(Engine* engine)
     std::cout << "command pool setup complete" << std::endl;
 }
 
-void Renderer::setupSamplers(Engine* engine)
+void RendererLoader::setupSamplers(Engine* engine)
 {
     VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -96,7 +96,7 @@ void Renderer::setupSamplers(Engine* engine)
     });
 }
 
-void Renderer::loadModel(Engine* engine, Model* model)
+void RendererLoader::loadModel(Engine* engine, Model* model)
 {
     model->v_buf_size = sizeof(Vertex) * model->vertices.size();
     model->i_buf_size = sizeof(uint16_t) * model->indices.size();
@@ -114,7 +114,7 @@ void Renderer::loadModel(Engine* engine, Model* model)
     std::cout << "mesh uploaded to cpu" << std::endl;
 }
 
-void Renderer::setupDescriptors(Engine* engine, Scene* scene)
+void RendererLoader::setupDescriptors(Engine* engine, Scene* scene)
 {
     VkDescriptorBindingFlags desc_var_flag = VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
     VkDescriptorSetLayoutBindingFlagsCreateInfo desc_binding_flags = {
@@ -169,7 +169,7 @@ void Renderer::setupDescriptors(Engine* engine, Scene* scene)
     });
 }
 
-void Renderer::updateSceneDescriptors(Engine* engine, Scene* scene)
+void RendererLoader::updateSceneDescriptors(Engine* engine, Scene* scene)
 {
     std::vector<VkDescriptorImageInfo> texture_descriptor_infos;
     for(const auto& tex : scene->textures)
@@ -188,7 +188,7 @@ void Renderer::updateSceneDescriptors(Engine* engine, Scene* scene)
     vkUpdateDescriptorSets(engine->device, 1, &write_desc_set, 0, nullptr);
 }
 
-Texture* Renderer::loadTexture(Engine* engine, std::string filename)
+Texture* RendererLoader::loadTexture(Engine* engine, std::string filename)
 {
     ktxTexture* ktx_texture = nullptr;
     KTX_error_code result = ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
@@ -333,4 +333,35 @@ Texture* Renderer::loadTexture(Engine* engine, std::string filename)
     });
 
     return tex;
+}
+
+void RendererLoader::loadShaders(Engine* engine, const char* shader_file)
+{
+    slang::createGlobalSession(slang_global_session.writeRef());
+    auto slang_targets = std::to_array<slang::TargetDesc>({{
+        .format = SLANG_SPIRV,
+        .profile = slang_global_session->findProfile("spirv_1_4")
+    }});
+    auto slang_options = std::to_array<slang::CompilerOptionEntry>({{slang::CompilerOptionName::EmitSpirvDirectly, {slang::CompilerOptionValueKind::Int, 1}}});
+    slang::SessionDesc slang_session_desc = {
+        .targets = slang_targets.data(),
+        .targetCount =  SlangInt(slang_targets.size()),
+        .defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR,
+        .compilerOptionEntries = slang_options.data(),
+        .compilerOptionEntryCount = uint32_t(slang_options.size())
+    };
+    slang_global_session->createSession(slang_session_desc, slang_session.writeRef());
+    slang_module = slang_session->loadModuleFromSource("scene_shader", shader_file, nullptr, nullptr);
+    slang_module->getTargetCode(0, spirv.writeRef());
+    VkShaderModuleCreateInfo shader_module_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = spirv->getBufferSize(),
+        .pCode = (uint32_t*)spirv->getBufferPointer()
+    };
+    vkCreateShaderModule(engine->device, &shader_module_create_info, nullptr, &shader_module);    
+
+    engine->main_deletion_queue.push([=]()
+    {
+        vkDestroyShaderModule(engine->device, shader_module, nullptr);
+    });
 }

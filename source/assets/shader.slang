@@ -1,5 +1,6 @@
 [[vk::binding(0, 1)]]
 Sampler2D textures[];
+
 struct SceneData
 {
     float4x4 projection;
@@ -7,6 +8,7 @@ struct SceneData
     float4 light_pos;
     uint32_t selected_instance;
 };
+
 struct PushConstants
 {
     float4x4 model_mat;
@@ -22,6 +24,7 @@ struct vertexInput
     float3 Normal;
     float2 UV;
 };
+
 struct vertexOutput
 {
     float4 Pos : SV_POSITION;
@@ -30,10 +33,7 @@ struct vertexOutput
     float3 Factor;
     float3 Light_vec;
     float3 View_vec;
-    uint32_t Instance_index;
 };
-
-
 
 [shader("vertex")]
 vertexOutput vertexMain(vertexInput input, uniform SceneData* scene)
@@ -47,7 +47,8 @@ vertexOutput vertexMain(vertexInput input, uniform SceneData* scene)
     output.Normal = mul((float3x3)model_view, input.Normal);
 
     float4 frag_pos = mul(model_view, float4(input.Pos, 1.0));
-    output.Light_vec = scene->light_pos.xyz - frag_pos.xyz;
+    float4 light_view = mul(scene->view, scene->light_pos);
+    output.Light_vec = light_view.xyz - frag_pos.xyz;
     output.View_vec = -frag_pos.xyz;
 
     output.UV = input.UV;

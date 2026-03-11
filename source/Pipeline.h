@@ -1,7 +1,7 @@
 #pragma once
 #include <volk/volk.h>
 #include "Engine.h"
-#include "Renderer.h"
+#include "RendererLoader.h"
 
 class Pipeline
 {
@@ -9,7 +9,7 @@ public:
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
 
-    Pipeline(Engine* engine, Renderer* renderer, Output* output)
+    Pipeline(Engine* engine, RendererLoader* loader, Output* output)
     {
        
     }
