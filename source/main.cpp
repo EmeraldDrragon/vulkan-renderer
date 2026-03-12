@@ -912,6 +912,8 @@ int main()
         .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_attributes.size()),
         .pVertexAttributeDescriptions = vertex_attributes.data()
     };
+
+
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
@@ -975,13 +977,6 @@ int main()
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &pipeline);
 	
     std::cout << "graphics pipeline created" << std::endl;
-    std::cout << "starting render loop" << std::endl;
-
-
-
-
-
-
 
 
 
@@ -989,6 +984,15 @@ int main()
 
 
     
+
+
+
+
+
+
+
+
+    std::cout << "starting render loop" << std::endl;
     //Render loop (Renderer class)
     bool update_swapchain = false;
     shaderData shader_data;
