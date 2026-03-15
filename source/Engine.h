@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <volk/volk.h>
 
 #include <iostream>
@@ -51,10 +50,10 @@ public:
     DeletionQueue main_deletion_queue;
     
     Engine();
-    ~Engine();
 
     void physicalDeviceSelection();
     void logicalDeviceCreation();
     void queueFamilySelection(VkDeviceQueueCreateInfo* queue_create_info);
     void vmaSetup();
+    void cleanup();
 };

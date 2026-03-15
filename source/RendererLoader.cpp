@@ -6,10 +6,17 @@ void RendererLoader::setupShaderDataBuffers(Engine* engine)
     //cosntructor sets up shared resources and synchronization objects
     for(auto i = 0; i < max_frames_in_flight; i++)
     {
-        size_t size = sizeof(shaderData);
+        size_t size = sizeof(SceneData);
         VkBufferUsageFlags usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         VmaAllocationCreateFlags vma_flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
         shader_data_buffers[i] = BufferAlloc::create(engine->allocator, engine->device, size, usage, vma_flags);
+
+        VkBufferDeviceAddressInfo addressInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            .buffer = shader_data_buffers[i].handle
+        };
+        shader_data_addresses[i] = vkGetBufferDeviceAddress(engine->device, &addressInfo);
+
         engine->main_deletion_queue.push([=]() mutable
         {
             shader_data_buffers[i].destroy();
@@ -94,6 +101,7 @@ void RendererLoader::setupSamplers(Engine* engine)
     {
         vkDestroySampler(engine->device, default_sampler, nullptr);
     });
+    std::cout << "samplers setup complete" << std::endl;
 }
 
 void RendererLoader::loadModel(Engine* engine, Model* model)
@@ -329,7 +337,6 @@ Texture* RendererLoader::loadTexture(Engine* engine, std::string filename)
     engine->main_deletion_queue.push([=]()
     {
         tex->destroy(engine->device);
-        delete tex; 
     });
 
     return tex;

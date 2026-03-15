@@ -24,10 +24,24 @@ add_subdirectory(external/KTX)
 
 add_executable(${PROJECT_NAME}
     source/main.cpp
-    source/RendererLoader.h
-    source/RendererLoader.cpp
+    source/BufferAlloc.cpp
+    source/BufferAlloc.h
+    source/Engine.cpp
+    source/Engine.h
+    source/ImageAlloc.cpp
+    source/ImageAlloc.h
+    source/Model.h
+    source/Output.cpp
+    source/Output.h
+    source/Pipeline.cpp
     source/Pipeline.h
-    source/Pipeline.cpp)
+    source/RendererLoader.cpp
+    source/RendererLoader.h
+    source/RenderLoop.cpp
+    source/RenderLoop.h
+    source/Scene.h
+    source/Texture.h
+    )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     source

@@ -56,21 +56,6 @@ Engine::Engine()
     vmaSetup();
 }
 
-Engine::~Engine()
-{
-    if(device != VK_NULL_HANDLE)
-    {
-        vkDeviceWaitIdle(device);
-    }
-    main_deletion_queue.flush();
-    vmaDestroyAllocator(allocator);
-    vkDestroyDevice(device, nullptr);
-    vkDestroySurfaceKHR(instance, surface, nullptr);
-    vkDestroyInstance(instance, nullptr);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-}
-
 void Engine::physicalDeviceSelection()
 {
     uint32_t device_count = 0;
@@ -193,4 +178,33 @@ void Engine::vmaSetup()
         .instance = instance
     };
     vmaCreateAllocator(&allocator_create_info, &allocator);
+}
+
+void Engine::cleanup()
+{
+    vkDeviceWaitIdle(device);
+
+    main_deletion_queue.flush();
+
+    vmaDestroyAllocator(allocator);
+
+    if(device != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(device, nullptr);
+
+    }
+    if(surface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+
+    }
+    if(instance != VK_NULL_HANDLE)
+    {
+        vkDestroyInstance(instance, nullptr);
+
+    }
+    SDL_DestroyWindow(window);
+
+    SDL_Quit();
+    std::cout << "cleanup complete"<< std::endl;
 }

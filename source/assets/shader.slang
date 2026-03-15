@@ -1,4 +1,4 @@
-[[vk::binding(0, 1)]]
+[[vk::binding(0, 0)]]
 Sampler2D textures[];
 
 struct SceneData
@@ -7,11 +7,13 @@ struct SceneData
     float4x4 view;
     float4 light_pos;
     uint32_t selected_instance;
+    float pad[3];
 };
 
 struct PushConstants
 {
     float4x4 model_mat;
+    SceneData *scene;
     uint32_t texture_index;
     uint32_t instance_id;
 }
@@ -36,24 +38,26 @@ struct vertexOutput
 };
 
 [shader("vertex")]
-vertexOutput vertexMain(vertexInput input, uniform SceneData* scene)
+vertexOutput vertexMain(vertexInput input)
 {
     vertexOutput output;
 
-    float4x4 mvp = mul(scene->projection, mul(scene->view, pc.model_mat));
+    SceneData scene = *pc->scene;
+
+    float4x4 mvp = mul(scene.projection, mul(scene.view, pc.model_mat));
     output.Pos = mul(mvp, float4(input.Pos, 1.0));
 
-    float4x4 model_view = mul(scene->view, pc.model_mat);
+    float4x4 model_view = mul(scene.view, pc.model_mat);
     output.Normal = mul((float3x3)model_view, input.Normal);
 
     float4 frag_pos = mul(model_view, float4(input.Pos, 1.0));
-    float4 light_view = mul(scene->view, scene->light_pos);
+    float4 light_view = mul(scene.view, scene.light_pos);
     output.Light_vec = light_view.xyz - frag_pos.xyz;
     output.View_vec = -frag_pos.xyz;
 
     output.UV = input.UV;
 
-    output.Factor = (scene->selected_instance == pc.instance_id ? 3.0f : 1.0f);
+    output.Factor = (scene.selected_instance == pc.instance_id ? 3.0f : 1.0f);
 
     return output;
 }

@@ -70,6 +70,14 @@ void Output::createImageAndImageView(Engine* engine)
         vkCreateImageView(engine->device, &image_view_create_info, nullptr, &swapchain_image_views[i]);
     }
 
+    engine->main_deletion_queue.push([this, engine = engine]() mutable
+    {
+        for (auto& view : swapchain_image_views)
+        {
+            vkDestroyImageView(engine->device, view, nullptr);
+        }
+        vkDestroySwapchainKHR(engine->device, swapchain, nullptr);
+    });
     std::cout << "created image views" << std::endl;
 }
 

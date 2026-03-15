@@ -25,14 +25,15 @@ public:
     std::vector<Vertex> vertices;
     std::vector<uint16_t> indices;
     BufferAlloc model_buffer;
-    VkDeviceSize index_count;
     VkDeviceSize v_buf_size;
     VkDeviceSize i_buf_size;
     Texture* texture;
 
-    Model(std::istream* filename)
+    Model(std::string path)
     {
-        tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, filename);
+        std::cout << "loading model" << std::endl;
+        std::ifstream filename(path);
+        tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, &filename);
         for(auto& index : shapes[0].mesh.indices)
         {
             Vertex v = {
@@ -54,5 +55,6 @@ public:
             vertices.push_back(v);
             indices.push_back(indices.size());
         }
+        std::cout << "loading model complete" << std::endl;
     }
 };

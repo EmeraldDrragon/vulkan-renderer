@@ -23,8 +23,6 @@
 #include <ktx.h>
 #include <ktxvulkan.h>
 
-#include <tiny_obj_loader.h>
-
 #include "BufferAlloc.h"
 #include "Engine.h"
 #include "Output.h"
@@ -34,13 +32,13 @@
 
 class Scene;
 
-struct shaderData
+struct SceneData
 {
     glm::mat4 projection;
     glm::mat4 view;
-    glm::mat4 model[3];
-    glm::vec4 light_pos = {0.0f, -10.0f, 10.0f, 0.0f};
-    uint32_t selected = 1;
+    glm::vec4 light_pos;
+    uint32_t selected_instance;
+    float pad[3];
 };
 
 
@@ -57,6 +55,10 @@ public:
     std::vector<VkSemaphore> render_semaphores;
 
     std::array<VkCommandBuffer, max_frames_in_flight> command_buffers;
+
+    std::array<VkDeviceAddress, max_frames_in_flight> shader_data_addresses;
+
+
     VkCommandPool command_pool;
 
     VkSampler default_sampler;
