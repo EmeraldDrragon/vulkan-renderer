@@ -1,6 +1,9 @@
 # vulkan-renderer
 vulkan rasterization gpu renderer
 
+## Result
+![Cat render](result/cat.gif)
+
 ## Credits and Attributions:
 This project is built using the following libraries and resources:
 
